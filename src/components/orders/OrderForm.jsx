@@ -1,22 +1,49 @@
-// src/components/orders/OrderForm.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
-export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
+export default function OrderForm({ clientId, onSuccess, onCancel, order }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
-    topic: order?.topic || '',
-    description: order?.description || '',
-    order_date: order?.order_date || new Date().toISOString().split('T')[0],
-    total_price: order?.total_price || '',
-    advance_payment: order?.advance_payment || '0',
+    topic: '',
+    description: '',
+    order_date: new Date().toISOString().split('T')[0],
+    total_price: '',
+    advance_payment: '0',
+    remaining_payment: '0',
   })
 
+  // Initialize form with order data if editing
+  useEffect(() => {
+    if (order) {
+      setFormData({
+        topic: order.topic || '',
+        description: order.description || '',
+        order_date: order.order_date || new Date().toISOString().split('T')[0],
+        total_price: order.total_price || '',
+        advance_payment: order.advance_payment || '0',
+        remaining_payment: order.remaining_payment || '0',
+      })
+    }
+  }, [order])
+
+  // Auto-calculate remaining payment when total or advance changes
+  useEffect(() => {
+    const total = parseFloat(formData.total_price) || 0
+    const advance = parseFloat(formData.advance_payment) || 0
+    const remaining = Math.max(0, total - advance)
+    
+    setFormData(prev => ({
+      ...prev,
+      remaining_payment: remaining.toFixed(2)
+    }))
+  }, [formData.total_price, formData.advance_payment])
+
   const handleChange = (e) => {
+    const { name, value } = e.target
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     })
   }
 
@@ -26,43 +53,47 @@ export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
     setLoading(true)
 
     try {
-      const total = parseFloat(formData.total_price) || 0
-      const advance = parseFloat(formData.advance_payment) || 0
-      const remaining = Math.max(0, total - advance)
+      const totalPrice = parseFloat(formData.total_price) || 0
+      const advancePayment = parseFloat(formData.advance_payment) || 0
+      const remainingPayment = Math.max(0, totalPrice - advancePayment)
 
       const orderData = {
         topic: formData.topic,
         description: formData.description,
         order_date: formData.order_date,
+        total_price: totalPrice,
+        advance_payment: advancePayment,
+        remaining_payment: remainingPayment,
         client_id: clientId,
-        total_price: total,
-        advance_payment: advance,
-        remaining_payment: remaining,
-        status: order?.status || 'pending',
+        is_completed: false,
+        is_delivered: false,
       }
 
-      if (order?.id) {
-        const { error } = await supabase
+      let error
+      if (order) {
+        // Update existing order
+        const { error: updateError } = await supabase
           .from('orders')
           .update(orderData)
           .eq('id', order.id)
-        if (error) throw error
+        error = updateError
       } else {
-        const { error } = await supabase
+        // Create new order
+        const { error: insertError } = await supabase
           .from('orders')
           .insert([orderData])
-        if (error) throw error
+        error = insertError
       }
+
+      if (error) throw error
       onSuccess()
     } catch (error) {
-      console.error('Error creating/updating order:', error)
-      setError(order?.id ? 'Failed to update order' : 'Failed to create order')
+      console.error('Error saving order:', error)
+      setError('Failed to save order')
     } finally {
       setLoading(false)
     }
   }
-
-  const remainingPayment = Math.max(0, (parseFloat(formData.total_price) || 0) - (parseFloat(formData.advance_payment) || 0))
 
   return (
     <div className="bg-gray-50 p-6 rounded-lg">
@@ -111,6 +142,7 @@ export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
             name="total_price"
             required
             step="0.01"
+            min="0"
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
             value={formData.total_price}
             onChange={handleChange}
@@ -124,6 +156,7 @@ export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
               type="number"
               name="advance_payment"
               step="0.01"
+              min="0"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
               value={formData.advance_payment}
               onChange={handleChange}
@@ -136,9 +169,10 @@ export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
               name="remaining_payment"
               step="0.01"
               readOnly
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 cursor-not-allowed"
-              value={remainingPayment.toFixed(2)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100"
+              value={formData.remaining_payment}
             />
+            <p className="text-xs text-gray-500 mt-1">Auto-calculated: Total - Advance</p>
           </div>
         </div>
 
@@ -152,7 +186,7 @@ export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
             disabled={loading}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
           >
-            {loading ? (order ? 'Saving...' : 'Creating...') : (order ? 'Save Changes' : 'Create Order')}
+            {loading ? 'Saving...' : (order ? 'Update Order' : 'Create Order')}
           </button>
           <button
             type="button"

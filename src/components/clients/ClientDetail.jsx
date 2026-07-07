@@ -50,6 +50,7 @@ export default function ClientDetail() {
 
   const handleOrderCreated = () => {
     setShowOrderForm(false)
+    setEditingOrder(null)
     fetchClientData()
   }
 
@@ -72,6 +73,11 @@ export default function ClientDetail() {
     setShowOrderForm(!showOrderForm)
   }
 
+  const handleCancelForm = () => {
+    setShowOrderForm(false)
+    setEditingOrder(null)
+  }
+
   if (loading) {
     return <div className="text-center py-8">Loading...</div>
   }
@@ -86,7 +92,7 @@ export default function ClientDetail() {
         onClick={() => navigate('/clients')}
         className="mb-4 text-indigo-600 hover:text-indigo-800"
       >
-        ← Back to Clients
+        Back to Clients
       </button>
 
       <div className="bg-white rounded-lg shadow p-6 mb-6 flex justify-between items-center">
@@ -115,23 +121,13 @@ export default function ClientDetail() {
         </button>
       </div>
 
-      {showOrderForm && (
-        <div className="mb-6">
-          <OrderForm
-            clientId={id}
-            onSuccess={handleOrderCreated}
-            onCancel={handleNewOrderClick}
-          />
-        </div>
-      )}
-
-      {editingOrder && (
+      {(showOrderForm || editingOrder) && (
         <div className="mb-6">
           <OrderForm
             clientId={id}
             order={editingOrder}
-            onSuccess={handleOrderUpdated}
-            onCancel={() => setEditingOrder(null)}
+            onSuccess={editingOrder ? handleOrderUpdated : handleOrderCreated}
+            onCancel={handleCancelForm}
           />
         </div>
       )}

@@ -4,41 +4,123 @@ import { useAuth } from '../../context/AuthContext'
 
 export default function OrderList({ orders, onStatusChange, onEdit }) {
   const [loading, setLoading] = useState(null)
+  const [editingPayment, setEditingPayment] = useState(null)
+  const [paymentData, setPaymentData] = useState({
+    advance_payment: '',
+    remaining_payment: ''
+  })
   const { isAdmin } = useAuth()
 
-  const handleStatusUpdate = async (orderId, newStatus) => {
+  const handleComplete = async (orderId) => {
     setLoading(orderId)
     try {
-      const updateData = { status: newStatus, updated_at: new Date() }
-      if (newStatus === 'delivered' || newStatus === 'completed') {
-        updateData.delivery_date = new Date().toISOString().split('T')[0]
-      }
-
       const { error } = await supabase
         .from('orders')
-        .update(updateData)
+        .update({ 
+          is_completed: true,
+          updated_at: new Date()
+        })
         .eq('id', orderId)
 
       if (error) throw error
       onStatusChange()
     } catch (error) {
-      console.error('Error updating order status:', error)
+      console.error('Error marking order as completed:', error)
     } finally {
       setLoading(null)
     }
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'completed':
-        return 'bg-green-100 text-green-800'
-      case 'delivered':
-        return 'bg-blue-100 text-blue-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+  const handleDeliver = async (orderId) => {
+    setLoading(orderId)
+    try {
+      // Get current order to calculate full payment
+      const order = orders.find(o => o.id === orderId)
+      
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          is_completed: true,
+          is_delivered: true,
+          delivery_date: new Date().toISOString().split('T')[0],
+          advance_payment: order.total_price, // Set advance to total
+          remaining_payment: 0, // Set remaining to 0
+          updated_at: new Date()
+        })
+        .eq('id', orderId)
+
+      if (error) throw error
+      onStatusChange()
+    } catch (error) {
+      console.error('Error marking order as delivered:', error)
+    } finally {
+      setLoading(null)
     }
+  }
+
+  const handlePaymentUpdate = async (orderId) => {
+    setLoading(orderId)
+    try {
+      const order = orders.find(o => o.id === orderId)
+      const newAdvance = parseFloat(paymentData.advance_payment) || 0
+      const newRemaining = Math.max(0, order.total_price - newAdvance)
+
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          advance_payment: newAdvance,
+          remaining_payment: newRemaining,
+          updated_at: new Date()
+        })
+        .eq('id', orderId)
+
+      if (error) throw error
+      setEditingPayment(null)
+      onStatusChange()
+    } catch (error) {
+      console.error('Error updating payment:', error)
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const openPaymentEditor = (order) => {
+    setEditingPayment(order.id)
+    setPaymentData({
+      advance_payment: order.advance_payment,
+      remaining_payment: order.remaining_payment
+    })
+  }
+
+  const getStatusTags = (order) => {
+    const tags = []
+    
+    if (order.is_completed && order.is_delivered) {
+      tags.push(
+        <span key="delivered" className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+          DELIVERED
+        </span>
+      )
+      tags.push(
+        <span key="completed" className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+          COMPLETED
+        </span>
+      )
+    } else if (order.is_completed) {
+      tags.push(
+        <span key="completed" className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+          COMPLETED
+        </span>
+      )
+    } else {
+      tags.push(
+        <span key="pending" className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+          PENDING
+        </span>
+      )
+    }
+    
+    return tags
   }
 
   if (orders.length === 0) {
@@ -53,63 +135,173 @@ export default function OrderList({ orders, onStatusChange, onEdit }) {
     <div className="space-y-4">
       {orders.map((order) => (
         <div key={order.id} className="bg-white rounded-lg shadow p-4">
-          <div className="flex justify-between items-start">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div className="flex-1">
-              <h3 className="font-semibold text-lg">{order.topic}</h3>
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <h3 className="font-semibold text-lg">{order.topic}</h3>
+                <div className="flex gap-2 flex-wrap">
+                  {getStatusTags(order)}
+                </div>
+              </div>
+              
               <p className="text-gray-600 text-sm mt-1">{order.description}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div>
                   <span className="text-gray-500">Order Date:</span>
-                  <span className="ml-2">{new Date(order.order_date).toLocaleDateString()}</span>
+                  <span className="ml-2 font-medium">
+                    {new Date(order.order_date).toLocaleDateString()}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-500">Total:</span>
-                  <span className="ml-2 font-semibold">₹{order.total_price}</span>
+                  <span className="ml-2 font-semibold text-gray-900">
+                    Rs {order.total_price}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-500">Advance:</span>
-                  <span className="ml-2">₹{order.advance_payment}</span>
+                  <span className="ml-2">Rs {order.advance_payment}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Remaining:</span>
-                  <span className="ml-2 font-semibold text-red-600">₹{order.remaining_payment}</span>
+                  <span className={`ml-2 font-semibold ${
+                    order.remaining_payment > 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    Rs {order.remaining_payment}
+                  </span>
                 </div>
                 {order.delivery_date && (
-                  <div>
+                  <div className="col-span-full">
                     <span className="text-gray-500">Delivered:</span>
-                    <span className="ml-2">{new Date(order.delivery_date).toLocaleDateString()}</span>
+                    <span className="ml-2 font-medium">
+                      {new Date(order.delivery_date).toLocaleDateString()}
+                    </span>
                   </div>
                 )}
               </div>
+
+              {/* Payment Editor */}
+              {editingPayment === order.id && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-semibold mb-2">Update Payment</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600">Advance Payment</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max={order.total_price}
+                        className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
+                        value={paymentData.advance_payment}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0
+                          const maxVal = order.total_price
+                          const newAdvance = Math.min(val, maxVal)
+                          setPaymentData({
+                            advance_payment: newAdvance,
+                            remaining_payment: Math.max(0, order.total_price - newAdvance)
+                          })
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600">Remaining Payment</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        readOnly
+                        className="mt-1 block w-full px-2 py-1 border border-gray-300 rounded-md text-sm bg-gray-100"
+                        value={paymentData.remaining_payment}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex space-x-2">
+                    <button
+                      onClick={() => handlePaymentUpdate(order.id)}
+                      disabled={loading === order.id}
+                      className="text-xs bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 disabled:opacity-50"
+                    >
+                      {loading === order.id ? 'Updating...' : 'Update Payment'}
+                    </button>
+                    <button
+                      onClick={() => setEditingPayment(null)}
+                      className="text-xs bg-gray-300 text-gray-700 px-3 py-1 rounded hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-col items-end space-y-2 ml-4">
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
-                {order.status.toUpperCase()}
-              </span>
-              
-              {order.status === 'pending' && (
-                <div className="flex space-x-2">
+            <div className="flex flex-col items-end space-y-2 mt-4 md:mt-0 ml-0 md:ml-4">
+              {!order.is_completed && (
+                <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => handleStatusUpdate(order.id, 'completed')}
+                    onClick={() => handleComplete(order.id)}
                     disabled={loading === order.id}
-                    className="text-xs bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 disabled:opacity-50"
+                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     Complete
                   </button>
                   <button
-                    onClick={() => handleStatusUpdate(order.id, 'delivered')}
+                    onClick={() => handleDeliver(order.id)}
                     disabled={loading === order.id}
-                    className="text-xs bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 disabled:opacity-50"
+                    className="text-xs bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
                   >
                     Deliver
                   </button>
+                  <button
+                    onClick={() => openPaymentEditor(order)}
+                    disabled={loading === order.id}
+                    className="text-xs bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    Adjust Payment
+                  </button>
                 </div>
               )}
-              {isAdmin && (
+              
+              {order.is_completed && !order.is_delivered && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleDeliver(order.id)}
+                    disabled={loading === order.id}
+                    className="text-xs bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    Mark as Delivered
+                  </button>
+                  <button
+                    onClick={() => openPaymentEditor(order)}
+                    disabled={loading === order.id}
+                    className="text-xs bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    Adjust Payment
+                  </button>
+                </div>
+              )}
+
+              {order.is_completed && order.is_delivered && (
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-green-600 font-medium">
+                    Payment Completed
+                  </span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => onEdit(order)}
+                      className="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Edit Order
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!order.is_completed && isAdmin && (
                 <button
                   onClick={() => onEdit(order)}
-                  className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-3 py-1 rounded hover:bg-indigo-100 transition-colors"
+                  className="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
                   Edit Order
                 </button>
