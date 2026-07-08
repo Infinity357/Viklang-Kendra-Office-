@@ -1,7 +1,9 @@
+// src/components/admin/Dashboard.jsx
 import { useAuth } from '../../context/AuthContext'
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { toDisplayDate } from '../../utils/dateUtils'
 
 export default function Dashboard() {
   const { user, profile, refreshProfile } = useAuth()
@@ -226,7 +228,11 @@ export default function Dashboard() {
     { 
       label: 'Total Clients', 
       value: stats.clients, 
-      icon: '👥', 
+      icon: (
+        <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
       bgColor: 'bg-blue-50',
       textColor: 'text-blue-600',
       onClick: () => navigate('/clients')
@@ -234,7 +240,11 @@ export default function Dashboard() {
     { 
       label: 'Active Orders', 
       value: stats.activeOrders, 
-      icon: '📋', 
+      icon: (
+        <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      ),
       bgColor: 'bg-green-50',
       textColor: 'text-green-600',
       onClick: () => handleViewOrders('pending')
@@ -242,7 +252,11 @@ export default function Dashboard() {
     { 
       label: 'Delivery Pending', 
       value: stats.deliveryPending, 
-      icon: '🚚', 
+      icon: (
+        <svg className="h-6 w-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        </svg>
+      ),
       bgColor: 'bg-yellow-50',
       textColor: 'text-yellow-600',
       onClick: () => handleViewOrders('delivery')
@@ -250,7 +264,11 @@ export default function Dashboard() {
     { 
       label: 'Completed', 
       value: stats.completed, 
-      icon: '✅', 
+      icon: (
+        <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
       bgColor: 'bg-purple-50',
       textColor: 'text-purple-600',
       onClick: () => handleViewOrders('completed')
@@ -328,7 +346,7 @@ export default function Dashboard() {
             >
               <div className="flex items-center">
                 <div className={`${stat.bgColor} rounded-xl p-3 mr-4`}>
-                  <span className="text-2xl">{stat.icon}</span>
+                  {stat.icon}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 font-medium">{stat.label}</p>
@@ -453,14 +471,14 @@ export default function Dashboard() {
                               <div>
                                 <p className="text-sm text-gray-500">Order Date</p>
                                 <p className="text-gray-900">
-                                  {new Date(order.order_date).toLocaleDateString()}
+                                  {toDisplayDate(order.order_date)}
                                 </p>
                               </div>
                               {order.delivery_date && (
                                 <div>
                                   <p className="text-sm text-gray-500">Delivery Date</p>
                                   <p className="text-gray-900">
-                                    {new Date(order.delivery_date).toLocaleDateString()}
+                                    {toDisplayDate(order.delivery_date)}
                                   </p>
                                 </div>
                               )}
