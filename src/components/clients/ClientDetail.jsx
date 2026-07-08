@@ -1,10 +1,12 @@
+// src/components/clients/ClientDetail.jsx
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import OrderList from '../orders/OrderList'
 import OrderForm from '../orders/OrderForm'
 import { useAuth } from '../../context/AuthContext'
-import { toDisplayDate } from '../../utils/dateUtils'
+import Modal from '../common/Modal'
+import ConfirmDialog from '../common/ConfirmDialog'
 
 export default function ClientDetail() {
   const { id } = useParams()
@@ -23,6 +25,10 @@ export default function ClientDetail() {
   const [editError, setEditError] = useState('')
   const [editSuccess, setEditSuccess] = useState('')
   const [saving, setSaving] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [orderToDelete, setOrderToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const { isAdmin } = useAuth()
 
   useEffect(() => {
@@ -64,11 +70,13 @@ export default function ClientDetail() {
   const handleOrderCreated = () => {
     setShowOrderForm(false)
     setEditingOrder(null)
+    setIsModalOpen(false)
     fetchClientData()
   }
 
   const handleOrderUpdated = () => {
     setEditingOrder(null)
+    setIsModalOpen(false)
     fetchClientData()
   }
 
@@ -77,8 +85,8 @@ export default function ClientDetail() {
   }
 
   const handleEditOrderClick = (order) => {
-    setShowOrderForm(false)
     setEditingOrder(order)
+    setIsModalOpen(true)
   }
 
   const handleNewOrderClick = () => {
@@ -89,6 +97,36 @@ export default function ClientDetail() {
   const handleCancelForm = () => {
     setShowOrderForm(false)
     setEditingOrder(null)
+    setIsModalOpen(false)
+  }
+
+  const handleDeleteOrder = (order) => {
+    setOrderToDelete(order)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return
+    
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderToDelete.id)
+
+      if (error) throw error
+      
+      // Close dialog and refresh orders
+      setDeleteDialogOpen(false)
+      setOrderToDelete(null)
+      fetchClientData()
+    } catch (error) {
+      console.error('Error deleting order:', error)
+      alert('Failed to delete order. Please try again.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const handleEditClientClick = () => {
@@ -314,21 +352,56 @@ export default function ClientDetail() {
         </button>
       </div>
 
-      {(showOrderForm || editingOrder) && (
+      {showOrderForm && (
         <div className="mb-6">
           <OrderForm
             clientId={id}
-            order={editingOrder}
-            onSuccess={editingOrder ? handleOrderUpdated : handleOrderCreated}
+            onSuccess={handleOrderCreated}
             onCancel={handleCancelForm}
           />
         </div>
       )}
 
+      {/* Modal for Editing Orders */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false)
+          setEditingOrder(null)
+        }}
+        title="Edit Order"
+        size="lg"
+      >
+        <OrderForm
+          clientId={id}
+          order={editingOrder}
+          onSuccess={handleOrderUpdated}
+          onCancel={() => {
+            setIsModalOpen(false)
+            setEditingOrder(null)
+          }}
+        />
+      </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false)
+          setOrderToDelete(null)
+        }}
+        onConfirm={confirmDeleteOrder}
+        title="Delete Order"
+        message={`Are you sure you want to delete "${orderToDelete?.topic || 'this order'}"? This action cannot be undone.`}
+        confirmText={deleting ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+      />
+
       <OrderList
         orders={orders}
         onStatusChange={handleOrderStatusChange}
         onEdit={handleEditOrderClick}
+        onDelete={handleDeleteOrder}
         clientId={id}
       />
     </div>

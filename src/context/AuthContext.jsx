@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
           const { data: userData } = await supabase.auth.getUser()
           const email = userData.user.email
           
-          console.log('📧 Trying to find profile by email:', email)
+          console.log(' Trying to find profile by email:', email)
           
           const { data: profileByEmail, error: emailError } = await supabase
             .from('user_profiles')
@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
           
           if (!emailError && profileByEmail) {
             // Update the profile with correct ID
-            console.log('🔄 Updating profile with correct ID')
+            console.log(' Updating profile with correct ID')
             const { data: updatedProfile, error: updateError } = await supabase
               .from('user_profiles')
               .update({ id: userId })
@@ -45,14 +45,14 @@ export function AuthProvider({ children }) {
               .single()
             
             if (!updateError) {
-              console.log('✅ Profile updated:', updatedProfile)
+              console.log(' Profile updated:', updatedProfile)
               setProfile(updatedProfile)
               return
             }
           }
           
           // Create new profile if none exists
-          console.log('📝 Creating new profile for:', email)
+          console.log('Creating new profile for:', email)
           const { data: newProfile, error: insertError } = await supabase
             .from('user_profiles')
             .insert([{ 
@@ -64,7 +64,7 @@ export function AuthProvider({ children }) {
             .single()
           
           if (!insertError) {
-            console.log('✅ Created new profile:', newProfile)
+            console.log(' Created new profile:', newProfile)
             setProfile(newProfile)
           }
         }
@@ -84,7 +84,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔄 Session check:', session ? 'Logged in' : 'Not logged in')
+      console.log(' Session check:', session ? 'Logged in' : 'Not logged in')
       if (session) {
         console.log(' User session found:', session.user.email)
         setUser(session.user)
@@ -96,7 +96,7 @@ export function AuthProvider({ children }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        console.log('🔄 Auth state changed:', _event)
+        console.log(' Auth state changed:', _event)
         if (session) {
           console.log(' User signed in:', session.user.email)
           setUser(session.user)
@@ -114,7 +114,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signIn = async (email, password) => {
-    console.log('🔐 Attempting sign in for:', email)
+    console.log(' Attempting sign in for:', email)
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -123,7 +123,7 @@ export function AuthProvider({ children }) {
       console.error(' Sign in error:', error)
       throw error
     }
-    console.log('✅ Sign in successful:', data.user.email)
+    console.log(' Sign in successful:', data.user.email)
     return data
   }
 
