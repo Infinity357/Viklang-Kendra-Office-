@@ -1,50 +1,55 @@
+// src/components/orders/OrderForm.jsx
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { toDisplayDate, getTodayDate } from '../../utils/dateUtils'
 
-export default function OrderForm({ clientId, onSuccess, onCancel, order }) {
+export default function OrderForm({ clientId, order, onSuccess, onCancel }) {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     topic: '',
+    registration_no: '',
     description: '',
-    order_date: getTodayDate(),
+    order_date: new Date().toISOString().split('T')[0],
     total_price: '',
-    advance_payment: '0',
-    remaining_payment: '0',
+    advance_payment: '',
+    remaining_payment: 0
   })
+  const [error, setError] = useState('')
 
-  // Initialize form with order data if editing
   useEffect(() => {
     if (order) {
       setFormData({
         topic: order.topic || '',
+        registration_no: order.registration_no || '',
         description: order.description || '',
-        order_date: order.order_date || getTodayDate(),
+        order_date: order.order_date || new Date().toISOString().split('T')[0],
         total_price: order.total_price || '',
-        advance_payment: order.advance_payment || '0',
-        remaining_payment: order.remaining_payment || '0',
+        advance_payment: order.advance_payment || '',
+        remaining_payment: order.remaining_payment || 0
       })
     }
   }, [order])
 
-  // Auto-calculate remaining payment when total or advance changes
-  useEffect(() => {
-    const total = parseFloat(formData.total_price) || 0
-    const advance = parseFloat(formData.advance_payment) || 0
-    const remaining = Math.max(0, total - advance)
-    
-    setFormData(prev => ({
-      ...prev,
-      remaining_payment: remaining.toFixed(2)
-    }))
-  }, [formData.total_price, formData.advance_payment])
-
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({
-      ...formData,
-      [name]: value,
+    
+    // For registration_no, only allow numbers
+    if (name === 'registration_no') {
+      const numericValue = value.replace(/[^0-9]/g, '')
+      setFormData(prev => ({ ...prev, [name]: numericValue }))
+      return
+    }
+    
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value }
+      
+      // Auto-calculate remaining payment
+      if (name === 'total_price' || name === 'advance_payment') {
+        const total = parseFloat(newData.total_price) || 0
+        const advance = parseFloat(newData.advance_payment) || 0
+        newData.remaining_payment = Math.max(0, total - advance)
+      }
+      
+      return newData
     })
   }
 
@@ -54,159 +59,199 @@ export default function OrderForm({ clientId, onSuccess, onCancel, order }) {
     setLoading(true)
 
     try {
-      const totalPrice = parseFloat(formData.total_price) || 0
-      const advancePayment = parseFloat(formData.advance_payment) || 0
-      const remainingPayment = Math.max(0, totalPrice - advancePayment)
+      const total = parseFloat(formData.total_price) || 0
+      const advance = parseFloat(formData.advance_payment) || 0
+      const remaining = Math.max(0, total - advance)
 
       const orderData = {
+        client_id: clientId,
         topic: formData.topic.trim(),
+        registration_no: formData.registration_no.trim(),
         description: formData.description.trim(),
         order_date: formData.order_date,
-        total_price: totalPrice,
-        advance_payment: advancePayment,
-        remaining_payment: remainingPayment,
-        client_id: clientId,
+        total_price: total,
+        advance_payment: advance,
+        remaining_payment: remaining,
+        updated_at: new Date()
       }
 
-      let result
       if (order) {
-        // Update existing order - preserve is_completed and is_delivered status
-        const { error: updateError } = await supabase
+        // Update existing order
+        const { error } = await supabase
           .from('orders')
-          .update({
-            ...orderData,
-            updated_at: new Date()
-          })
+          .update(orderData)
           .eq('id', order.id)
-        result = updateError
+
+        if (error) throw error
       } else {
-        // Create new order - set default statuses
-        const { error: insertError } = await supabase
+        // Create new order
+        const { error } = await supabase
           .from('orders')
           .insert([{
             ...orderData,
             is_completed: false,
             is_delivered: false,
+            created_at: new Date()
           }])
-        result = insertError
+
+        if (error) throw error
       }
 
-      if (result) throw result
       onSuccess()
     } catch (error) {
       console.error('Error saving order:', error)
-      setError('Failed to save order. Please try again.')
+      setError(error.message || 'Failed to save order')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="bg-gray-50 p-6 rounded-lg">
-      <h3 className="text-lg font-semibold mb-4">{order ? 'Edit Order' : 'New Order'}</h3>
+    <div className="bg-white rounded-lg shadow p-6">
+      <h2 className="text-xl font-bold mb-4">{order ? 'Edit Order' : 'New Order'}</h2>
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Topic */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Topic</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Topic <span className="text-red-500">*</span>
+          </label>
           <input
             type="text"
             name="topic"
             required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
             value={formData.topic}
             onChange={handleChange}
             placeholder="Enter order topic"
           />
         </div>
 
+        {/* Registration No. - Numbers Only */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Description</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Registration No. <span className="text-xs text-gray-500">(Numbers only)</span>
+          </label>
+          <input
+            type="text"
+            name="registration_no"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+            value={formData.registration_no}
+            onChange={handleChange}
+            placeholder="Enter registration number (numbers only)"
+            inputMode="numeric"
+            pattern="[0-9]*"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Description
+          </label>
           <textarea
             name="description"
-            rows="3"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            rows="4"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
             value={formData.description}
             onChange={handleChange}
             placeholder="Enter order description"
           />
         </div>
 
+        {/* Order Date */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Order Date</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Order Date <span className="text-red-500">*</span>
+          </label>
           <input
             type="date"
             name="order_date"
             required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
             value={formData.order_date}
             onChange={handleChange}
           />
-          <p className="text-xs text-gray-500 mt-1">
-            Selected date: {toDisplayDate(formData.order_date)}
-          </p>
         </div>
 
+        {/* Total Price */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Total Price</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Total Price <span className="text-red-500">*</span>
+          </label>
           <input
             type="number"
             name="total_price"
             required
-            step="0.01"
             min="0"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+            step="0.01"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
             value={formData.total_price}
             onChange={handleChange}
             placeholder="Enter total price"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Advance Payment</label>
-            <input
-              type="number"
-              name="advance_payment"
-              step="0.01"
-              min="0"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              value={formData.advance_payment}
-              onChange={handleChange}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Remaining Payment</label>
-            <input
-              type="number"
-              name="remaining_payment"
-              step="0.01"
-              readOnly
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-600"
-              value={formData.remaining_payment}
-            />
-            <p className="text-xs text-gray-500 mt-1">Auto-calculated: Total - Advance</p>
-          </div>
+        {/* Advance Payment */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Advance Payment
+          </label>
+          <input
+            type="number"
+            name="advance_payment"
+            min="0"
+            step="0.01"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+            value={formData.advance_payment}
+            onChange={handleChange}
+            placeholder="Enter advance payment"
+          />
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md text-sm">
-            {error}
-          </div>
-        )}
+        {/* Remaining Payment (Auto-calculated) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Remaining Payment
+          </label>
+          <input
+            type="text"
+            readOnly
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 text-gray-700"
+            value={`₹${formData.remaining_payment.toFixed(2)}`}
+          />
+          <p className="text-xs text-gray-500 mt-1">Auto-calculated: Total - Advance</p>
+        </div>
 
-        <div className="flex space-x-4 pt-2">
+        {/* Buttons */}
+        <div className="flex space-x-3 pt-2">
           <button
             type="submit"
             disabled={loading}
-            className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
-            {loading ? 'Saving...' : (order ? 'Update Order' : 'Create Order')}
+            {loading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {order ? 'Updating...' : 'Creating...'}
+              </>
+            ) : (
+              order ? 'Update Order' : 'Create Order'
+            )}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="bg-gray-200 text-gray-700 px-6 py-2 rounded-md hover:bg-gray-300 transition-colors"
+            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-2 rounded-md transition-colors"
           >
             Cancel
           </button>

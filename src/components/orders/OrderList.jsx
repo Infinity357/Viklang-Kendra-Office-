@@ -1,3 +1,4 @@
+// src/components/orders/OrderList.jsx
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -126,9 +127,16 @@ export default function OrderList({ orders, onStatusChange, onEdit, onDelete, sh
     )
   }
 
+  // Sort orders by order_date in descending order (newest first)
+  const sortedOrders = [...orders].sort((a, b) => {
+    const dateA = new Date(a.order_date)
+    const dateB = new Date(b.order_date)
+    return dateB - dateA
+  })
+
   return (
     <div className="space-y-4">
-      {orders.map((order) => {
+      {sortedOrders.map((order) => {
         // Format dates using toDisplayDate
         const formattedOrderDate = toDisplayDate(order.order_date)
         const formattedDeliveryDate = order.delivery_date ? toDisplayDate(order.delivery_date) : null
@@ -149,8 +157,16 @@ export default function OrderList({ orders, onStatusChange, onEdit, onDelete, sh
             <div className="flex flex-col pr-8">
               {/* Header */}
               <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-3 flex-wrap">
+                <div>
                   <h3 className="font-semibold text-lg">{order.topic}</h3>
+                  {/* Registration No. - 85% size of topic (text-base) and Bold */}
+                  {order.registration_no && (
+                    <p className="text-base font-bold text-gray-700 mt-0.5">
+                      Reg No: {order.registration_no}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
                   {getStatusBadge(order)}
                 </div>
               </div>
