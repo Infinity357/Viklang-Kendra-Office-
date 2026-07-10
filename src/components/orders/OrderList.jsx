@@ -1,4 +1,3 @@
-// src/components/orders/OrderList.jsx
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -135,8 +134,19 @@ export default function OrderList({ orders, onStatusChange, onEdit, onDelete, sh
         const formattedDeliveryDate = order.delivery_date ? toDisplayDate(order.delivery_date) : null
         
         return (
-          <div key={order.id} className="bg-white rounded-lg shadow p-4">
-            <div className="flex flex-col">
+          <div key={order.id} className="bg-white rounded-lg shadow p-4 relative">
+            {/* Delete Button - Top Right */}
+            <button
+              onClick={() => onDelete(order)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"
+              title="Delete Order"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+
+            <div className="flex flex-col pr-8">
               {/* Header */}
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3 flex-wrap">
