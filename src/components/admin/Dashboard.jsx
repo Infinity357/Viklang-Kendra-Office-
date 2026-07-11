@@ -130,25 +130,35 @@ export default function Dashboard() {
         query = query.eq('is_completed', true).eq('is_delivered', true)
       }
 
+      // Search functionality with registration number support
       if (search && search.trim() !== '') {
         const searchTermTrimmed = search.trim()
         
+        // First, find matching clients by name or mobile
+        let clientIds = []
         try {
           const { data: matchingClients } = await supabase
             .from('clients')
             .select('id')
             .or(`name.ilike.%${searchTermTrimmed}%,mobile_no.ilike.%${searchTermTrimmed}%`)
-
-          const clientIds = matchingClients?.map(c => c.id) || []
-
-          if (clientIds.length > 0) {
-            query = query.or(`topic.ilike.%${searchTermTrimmed}%,client_id.in.(${clientIds.join(',')})`)
-          } else {
-            query = query.ilike('topic', `%${searchTermTrimmed}%`)
-          }
+          clientIds = matchingClients?.map(c => c.id) || []
         } catch (err) {
-          query = query.ilike('topic', `%${searchTermTrimmed}%`)
+          console.log('Error searching clients:', err)
         }
+
+        // Build search conditions
+        const searchConditions = [
+          `topic.ilike.%${searchTermTrimmed}%`,
+          `registration_no.ilike.%${searchTermTrimmed}%`
+        ]
+        
+        // Add client ID condition if any clients found
+        if (clientIds.length > 0) {
+          searchConditions.push(`client_id.in.(${clientIds.join(',')})`)
+        }
+        
+        // Apply all search conditions with OR
+        query = query.or(searchConditions.join(','))
       }
 
       const from = (pageNum - 1) * ITEMS_PER_PAGE
@@ -162,6 +172,7 @@ export default function Dashboard() {
 
       if (error) throw error
 
+      // Count query with same search conditions
       let countQuery = supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
@@ -174,25 +185,31 @@ export default function Dashboard() {
         countQuery = countQuery.eq('is_completed', true).eq('is_delivered', true)
       }
 
+      // Apply same search conditions to count query
       if (search && search.trim() !== '') {
         const searchTermTrimmed = search.trim()
         
+        let clientIds = []
         try {
           const { data: matchingClients } = await supabase
             .from('clients')
             .select('id')
             .or(`name.ilike.%${searchTermTrimmed}%,mobile_no.ilike.%${searchTermTrimmed}%`)
-
-          const clientIds = matchingClients?.map(c => c.id) || []
-
-          if (clientIds.length > 0) {
-            countQuery = countQuery.or(`topic.ilike.%${searchTermTrimmed}%,client_id.in.(${clientIds.join(',')})`)
-          } else {
-            countQuery = countQuery.ilike('topic', `%${searchTermTrimmed}%`)
-          }
+          clientIds = matchingClients?.map(c => c.id) || []
         } catch (err) {
-          countQuery = countQuery.ilike('topic', `%${searchTermTrimmed}%`)
+          console.log('Error searching clients for count:', err)
         }
+
+        const searchConditions = [
+          `topic.ilike.%${searchTermTrimmed}%`,
+          `registration_no.ilike.%${searchTermTrimmed}%`
+        ]
+        
+        if (clientIds.length > 0) {
+          searchConditions.push(`client_id.in.(${clientIds.join(',')})`)
+        }
+        
+        countQuery = countQuery.or(searchConditions.join(','))
       }
 
       const { count } = await countQuery
@@ -403,7 +420,7 @@ export default function Dashboard() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Search by order topic, client name, or mobile number..."
+                    placeholder="Search by order topic, registration no, client name, or mobile number..."
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -477,6 +494,16 @@ export default function Dashboard() {
                                 )}
                               </div>
                             </div>
+                            
+                            {/* Registration Number */}
+                            {order.registration_no && (
+                              <div className="mb-2">
+                                <p className="text-sm font-semibold text-gray-700">
+                                  Reg No: {order.registration_no}
+                                </p>
+                              </div>
+                            )}
+
                             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                               <div>
                                 <p className="text-sm text-gray-500">Client</p>
